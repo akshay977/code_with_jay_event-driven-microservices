@@ -24,6 +24,7 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
+        cache-dependency-path: microservices/customer/package-lock.json
     - name: Test customer service
       working-directory: ./microservices/customer
       run: |
