@@ -1,0 +1,178 @@
+1. The monolith (refer online_shopping_monolithic) shopping application is split into 4 microservices
+with an API Gateway:
+
+	a. Customer
+	b. Product
+	c. Shopping
+	d. Gateway (API gateway service)
+
+2. Each microservice above has APIs related to a context like customer, product etc and also
+each microservice has its own mongodb database.
+
+3. The communication between microservices is done using HTTP calls (Synchronous form of communication)
+and webhooks (APIs which receive the requests from other microservices).
+
+4. Why are message brokers used ?
+Message brokers like Kafka, RabbitMQ is used to communicate data using events to other microservices.
+They use a publish-subscribe model where a producer sents data as publisher and a microservice subscribed
+to message broker takes the data from the message broker. The difference between using HTTP calls and Message
+broker is that if the consumer service is offline then in case of HTTP calls the data fails to be sent 
+and message brokers persist that event data in a temporary storage and when the consumer service is 
+back online it receives the data from message broker.
+
+5. A message broker has an exchange and multiple queues. This exchange distributes the events among the queues.
+The exchange uses the binding key to distribute the events to the right queue. Each binding key is specific to
+the queue and exchange route.
+
+6. In this project, there are 2 queues: Shopping queue and Customer service queue. Customer service is
+subscribed to 'Customer Queue' using binding_key 'CUSTOMER_SERVICE'. Product service publishes relevant messages
+to customer and shopping microservices using their binding keys. Shopping service is subscribed to 
+shopping queue using binding key 'SHOPPING_SERVICE'.
+
+7. The dockerfile inside Proxy module deletes the outdated nginx.conf file inside the container 
+and copies the config file inside host machine to container.
+
+8. This is an **Nginx configuration** that acts as a **reverse proxy** in front of multiple microservices (product, shopping, customer). It routes incoming HTTP requests to different backend services based on the URL path. [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+## Line-by-line explanation
+
+### Worker and event settings
+
+```nginx
+worker_processes 4;
+```
+- Sets the number of **worker processes** Nginx will spawn. Each worker handles client connections. `4` is often set to match the number of CPU cores for better parallelism. [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+```nginx
+events {
+    worker_connections 1024;
+}
+```
+- `events` block configures how connections are handled.
+- `worker_connections 1024;` means each worker can handle up to **1024 simultaneous connections**. Total capacity ≈ `worker_processes × worker_connections` (here ~4096). [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+### HTTP block and server
+
+```nginx
+http {
+    server {
+        listen 80;
+        charset utf-8;
+```
+- `http { ... }` wraps all HTTP-related config.
+- `server { ... }` defines a virtual server (like a site).
+- `listen 80;` tells Nginx to accept HTTP traffic on **port 80**.
+- `charset utf-8;` sets the default response character encoding to UTF‑8. [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+### Default location: proxy to product service
+
+```nginx
+        location / {
+            proxy_pass http://product:8002;
+```
+- `location / { ... }` matches **all requests** (fallback route).
+- `proxy_pass http://product:8002;` forwards requests to the backend service named `product` on port `8002` (likely a Docker service name). [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+```nginx
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+```
+- These enable **WebSocket** support:
+  - `proxy_http_version 1.1;` uses HTTP/1.1 for proxying (required for WebSockets).
+  - `Upgrade` and `Connection` headers allow upgrading from HTTP to WebSocket when the client requests it. [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+```nginx
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+```
+- `proxy_set_header Host $host;` passes the original `Host` header to the backend (important if the backend serves multiple domains).
+- `proxy_cache_bypass $http_upgrade;` disables caching for WebSocket upgrade requests. [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+### Shopping service route
+
+```nginx
+        location ~ ^/shopping {
+            rewrite ^/shopping/(.*) /$1 break;
+            proxy_pass http://shopping:8003;
+```
+- `location ~ ^/shopping { ... }` uses a **regex** to match paths starting with `/shopping`.
+- `rewrite ^/shopping/(.*) /$1 break;` strips the `/shopping` prefix:
+  - `/shopping/api/items` → `/api/items`
+  - `break` stops further rewrite processing.
+- `proxy_pass http://shopping:8003;` forwards the rewritten path to the `shopping` service on port `8003`. [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+The remaining headers are the same WebSocket and proxy settings as above:
+
+```nginx
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+```
+
+### Customer service route
+
+```nginx
+        location ~ ^/customer {
+            rewrite ^/customer/(.*) /$1 break;
+            proxy_pass http://customer:8001;
+```
+- Matches paths starting with `/customer`.
+- Rewrites `/customer/...` → `/...` (removes `/customer` prefix).
+- Proxies to the `customer` service on port `8001`. [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+Again, the rest is identical WebSocket/proxy header config:
+
+```nginx
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+    }
+}
+```
+
+## How routing works in practice
+
+- `GET /` → proxied to `http://product:8002/`
+- `GET /shopping/cart` → rewritten to `/cart` → proxied to `http://shopping:8003/cart`
+- `GET /customer/profile` → rewritten to `/profile` → proxied to `http://customer:8001/profile`
+
+This pattern is common in microservices setups where Nginx acts as an **API gateway**, routing by path prefix to different backend containers. [stackoverflow](https://stackoverflow.com/questions/39515490/how-to-expose-ports-defined-in-expose-without-explicitly-setting-ports-via-cli-o)
+
+9. Remove node_modules folders before shifting this microservices root directory to windows linux subsystem.
+
+10. Run following docker commands to delete images and containers, rebuild them and run the containers:
+
+    docker compose down -v
+    docker compose build --no-cache
+    docker compose up
+
+11. CQRS pattern - This pattern stands for Command Query Responsibility Segregation. 
+CQRS (Command Query Responsibility Segregation) is an architectural software design pattern that separates mutate operations (writes) from retrieval operations (reads) into entirely distinct models. By isolating these concerns, you can design, optimize, and scale the data-modification logic independently from the data-display logic, significantly boosting application performance and scalability.
+
+12. In the online shopping app, we had redundant data in each database of each microservice so to get rid of that redundant data we keep only the reference id in it like productId, customerId etc. Using these Ids we call the other microservices using gRPC and get data from their databases. So now we are separately scaling the reads and writes queries using gRPC for read queries and RabbitMQ for write queries.
+
+13. Concurrently is used to run processes simultaneously in one terminal to avoid running processes in separate terminals and using --kill-others flag if one process fails others also are terminated.
+
+                                    ######## Microservices Deployment with CI/CD ########
+
+14. In manual deployment process, we make changes to the source code, delete node_modules from all microservices and create a zip file
+which is uploaded again in AWS Elastic Beanstalk. This whole process is a hassle and can be replaced with CI/CD processes using Github Actions.
+
+15. Monorepo is a repo which contains all the source code for all microservices whereas multi-repo has single service source code in 
+a single repo.
+
+16. CI/CD process:
+
+    a. Create a new branch for new feature, push code and create a pull request.
+    b. On creating a pull request, the CI process runs which executes all test cases in the project. After test cases
+       pass code review is done and new changes are merged to master branch. After merging to master branch the
+       Continuous deployment process will execute.
+    c. In continuous deployment/delivery pipeline the new feature is deployed to QA environment or production environment.
