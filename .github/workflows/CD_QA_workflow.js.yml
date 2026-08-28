@@ -53,7 +53,7 @@ jobs:
     - name: Generate deployment package
       run: |
         cd microservices
-        zip -r deploy.zip . -x '*.git'
+        zip -r ../deploy.zip . -x '*.git/*' -x '*.git' -x '../deploy.zip'
         
     - name: Deploy on Elastic Beanstalk QA Env
       uses: einaregilsson/beanstalk-deploy@v23
