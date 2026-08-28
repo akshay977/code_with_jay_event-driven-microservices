@@ -1,0 +1,66 @@
+# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+
+name: Deploy on QA
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch: 
+
+jobs:
+  deploy_on_qa:
+  
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v4
+      
+    - name: Create customer env file
+      working-directory: microservices/customer
+      run: |
+        touch .env
+        echo APP_SECRET=jg_youtube_tutorial >> .env
+        echo MONGODB_URI=mongodb://nosql-db:27017/shopping_ms_customer >> .env
+        echo MESSAGE_BROKER_URL=amqps://pzttsuog:3qIXZTUMb-knjtXusRhKvde3FReYBsEr@warthog.lmq.cloudamqp.com/pzttsuog >> .env
+        echo EXCHANGE_NAME=ONLINE_SHOPPING >> .env
+        echo PORT=8001 >> .env
+        cat .env
+
+    - name: Create products env file
+      working-directory: microservices/product
+      run: |
+        touch .env
+        echo APP_SECRET=jg_youtube_tutorial >> .env
+        echo MONGODB_URI=mongodb://nosql-db:27017/shopping_ms_products >> .env
+        echo MESSAGE_BROKER_URL=amqps://pzttsuog:3qIXZTUMb-knjtXusRhKvde3FReYBsEr@warthog.lmq.cloudamqp.com/pzttsuog >> .env
+        echo EXCHANGE_NAME=ONLINE_SHOPPING >> .env
+        echo PORT=8002 >> .env
+        cat .env
+        
+    - name: Create shopping env file
+      working-directory: microservices/shopping
+      run: |
+        touch .env
+        echo APP_SECRET=jg_youtube_tutorial >> .env
+        echo MONGODB_URI=mongodb://nosql-db:27017/shopping_ms_shopping >> .env
+        echo MESSAGE_BROKER_URL=amqps://pzttsuog:3qIXZTUMb-knjtXusRhKvde3FReYBsEr@warthog.lmq.cloudamqp.com/pzttsuog >> .env
+        echo EXCHANGE_NAME=ONLINE_SHOPPING >> .env
+        echo PORT=8003 >> .env
+        cat .env
+        
+    - name: Generate deployment package
+      run: |
+        zip -r deploy.zip . -x '*.git'
+        
+    # - name: Deploy on Elastic Beanstalk QA Env
+    #   uses: einaregilsson/beanstalk-deploy@v23
+    #   with:
+    #     aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    #     aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    #     application_name: online_shopping_microservices_v4
+    #     environment_name: Onlineshoppingmicroservicesv4-env
+    #     version_label: "ver-${{ github.sha }}"
+    #     region: ap-south-1
+    #     deployment_package: deploy.zip
