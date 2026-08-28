@@ -55,13 +55,13 @@ jobs:
         cd microservices
         zip -r ../deploy.zip . -x '*.git/*' -x '*.git' -x '../deploy.zip'
         
-    - name: Deploy on Elastic Beanstalk QA Env
-      uses: einaregilsson/beanstalk-deploy@v23
-      with:
-        aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        application_name: online_shopping_microservices_v4
-        environment_name: Onlineshoppingmicroservicesv4-env
-        version_label: "ver-${{ github.sha }}"
-        region: ap-south-1
-        deployment_package: deploy.zip
+    # - name: Deploy on Elastic Beanstalk QA Env
+    #   uses: einaregilsson/beanstalk-deploy@v23
+    #   with:
+    #     aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    #     aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    #     application_name: online_shopping_microservices_v4
+    #     environment_name: Onlineshoppingmicroservicesv4-env
+    #     version_label: "ver-${{ github.sha }}"
+    #     region: ap-south-1
+    #     deployment_package: deploy.zip
