@@ -175,4 +175,5 @@ a single repo.
     b. On creating a pull request, the CI process runs which executes all test cases in the project. After test cases
        pass code review is done and new changes are merged to master branch. After merging to master branch the
        Continuous deployment process will execute.
-    c. In continuous deployment/delivery pipeline the new feature is deployed to QA environment or production environment.
+    c. In continuous deployment/delivery pipeline the new feature is deployed to QA environment and when the QA team
+       says the feature is good to go then we deploy it to production environment.
