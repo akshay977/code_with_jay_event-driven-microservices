@@ -1,6 +1,6 @@
 const CustomerService = require("../services/customer-service");
 const UserAuth = require("./middlewares/auth");
-const { SubscribeMessage } = require('../utils');
+const { SubscribeMessage, PublishMessage } = require('../utils');
 
 module.exports = (app, channel) => {
   const service = new CustomerService();
@@ -57,24 +57,36 @@ module.exports = (app, channel) => {
     }
   });
 
-  app.get("/shoping-details", UserAuth, async (req, res, next) => {
+  app.delete("/profile", UserAuth, async (req, res, next) => {
     try {
       const { _id } = req.user;
-      const { data } = await service.GetShopingDetails(_id);
-
-      return res.json(data);
+      const { data, payload } = await service.DeleteProfile({ _id });
+      // TODO: Send message to shopping service for removing cart & wishlist
+      PublishMessage(channel, SHOPPING_SERVICE, JSON.stringify(payload));
+      res.json(data);
     } catch (err) {
       next(err);
     }
   });
 
-  app.get("/wishlist", UserAuth, async (req, res, next) => {
-    try {
-      const { _id } = req.user;
-      const { data } = await service.GetWishList(_id);
-      return res.status(200).json(data);
-    } catch (err) {
-      next(err);
-    }
-  });
+  // app.get("/shoping-details", UserAuth, async (req, res, next) => {
+  //   try {
+  //     const { _id } = req.user;
+  //     const { data } = await service.GetShopingDetails(_id);
+
+  //     return res.json(data);
+  //   } catch (err) {
+  //     next(err);
+  //   }
+  // });
+
+  // app.get("/wishlist", UserAuth, async (req, res, next) => {
+  //   try {
+  //     const { _id } = req.user;
+  //     const { data } = await service.GetWishList(_id);
+  //     return res.status(200).json(data);
+  //   } catch (err) {
+  //     next(err);
+  //   }
+  // });
 };
