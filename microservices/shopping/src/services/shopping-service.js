@@ -7,11 +7,19 @@ class ShoppingService {
     this.repository = new ShoppingRepository();
   }
 
+  async AddCartItem(customerId, product_id, qty) {
+    // Grab product info from product service through RPC
+    const product_response = {};
+    if (product_response && product_response._id) {
+      
+    }
+  }
+
+  async RemoveCartItem(customerId, product_id, qty) {}
+
   async getCart(_id) {
     try {
-      const cartItems = await this.repository.Cart(_id);
-
-      return FormateData(cartItems);
+      return await this.repository.Cart(_id);
     } catch (err) {
       throw err;
     }
